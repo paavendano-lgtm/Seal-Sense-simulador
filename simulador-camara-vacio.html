@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Simulador de cámara de vacío · SealSense</title>
+<style>
+:root{--bg:#F6F1FC;--card:#FFFFFF;--tx:#231933;--mut:#5B4B74;--bd:#E4D9F3;--ac:#7B2FA3;--ok:#4C8A12;--bad:#B3261E;--wa:#9A6B00;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1B1226;--card:#271A36;--tx:#F1EAF8;--mut:#BFAED4;--bd:#3D2C52;--ac:#C08CEB;--ok:#9BD24A;--bad:#FF8A80;--wa:#E8B84A;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1B1226;--card:#271A36;--tx:#F1EAF8;--mut:#BFAED4;--bd:#3D2C52;--ac:#C08CEB;--ok:#9BD24A;--bad:#FF8A80;--wa:#E8B84A;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Arial,sans-serif;padding:16px}
+main{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+h1{font-size:20px;margin:0}
+h2{font-size:15px;margin:0 0 8px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px}
+.warn{border-left:4px solid var(--wa);font-size:13px;color:var(--mut)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mut)}
+input,select,button,textarea{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:7px}
+input[type=range]{padding:0}
+button{background:var(--ac);color:#fff;border:0;cursor:pointer;padding:9px 14px;font-weight:600}
+b.v{color:var(--tx)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.kpi{border:1px solid var(--bd);border-radius:10px;padding:10px}
+.kpi small{display:block;color:var(--mut);font-size:12px}
+.kpi strong{font-size:18px}
+.ok{color:var(--ok)}.bad{color:var(--bad)}
+.wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--bd);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+details summary{cursor:pointer;color:var(--ac);font-weight:600;font-size:13px}
+textarea{width:100%;height:90px;font:12px/1.3 ui-monospace,Menlo,monospace}
+</style>
+</head>
+<body>
+<main>
+<div>
+<h1>Simulador de cámara de vacío</h1>
+<div style="color:var(--mut);font-size:13px">Decaimiento de vacío (ASTM F2338) · 4 geometrías de envase · <b>datos simulados</b></div>
+</div>
+<div class="card warn">Modelo físico simplificado (gas ideal + flujo viscoso tipo Poiseuille). La relación entre diámetro de orificio y caudal es un supuesto: sirve para dimensionar cámaras y probar el algoritmo de decisión, pero no reemplaza la validación con orificios calibrados reales. Si usan estos datos en el pitch, rotúlenlos como simulados.</div>
+
+<div class="card">
+<h2>Parámetros principales</h2>
+<div class="grid">
+<label>Geometría de cámara
+<select id="geo"><option value="tarro">Tarro 62 × 50 mm</option><option value="larga">Máscara larga 23 × 136 mm</option><option value="corta">Máscara corta 18,6 × 115 mm</option><option value="tubo">Tubo 54 × 120 mm (aprox.)</option></select></label>
+<label>Orificio del envase: <b class="v" id="dv"></b>
+<input type="range" id="d" min="0" max="50" step="1" value="10"></label>
+<label>Obstrucción por producto: <b class="v" id="ov"></b>
+<input type="range" id="ob" min="0" max="95" step="5" value="0"></label>
+<label>Límite de aceptación ΔP (mbar)
+<input type="number" id="lim" value="0.01" step="0.005" min="0"></label>
+</div>
+<details style="margin-top:10px"><summary>Parámetros avanzados</summary>
+<div class="grid" style="margin-top:10px">
+<label>Volumen muerto del sistema (cm³)<input type="number" id="dead" value="30" min="0"></label>
+<label>Velocidad efectiva de bombeo (L/s)<input type="number" id="s" value="0.08" step="0.01" min="0.01"></label>
+<label>Presión final de bomba (mbar)<input type="number" id="pu" value="1" step="0.5" min="0.01"></label>
+<label>Longitud del canal de fuga (mm)<input type="number" id="lc" value="0.2" step="0.05" min="0.01"></label>
+<label>Ruido del transductor σ (mbar)<input type="number" id="sg" value="0.01" step="0.005" min="0"></label>
+<label>Decaimiento de referencia (mbar/s)<input type="number" id="rf" value="0.02" step="0.005" min="0"></label>
+<label>Variación de la referencia (%)<input type="number" id="rv" value="5" min="0"></label>
+<label>Tiempo de llenado (s)<input type="number" id="tf" value="6" min="1"></label>
+<label>Tiempo de equilibrio (s)<input type="number" id="te" value="3" min="0"></label>
+<label>Tiempo de prueba (s)<input type="number" id="tt" value="5" min="1"></label>
+<label>Umbral fuga pequeña / mediana (mbar·L/s)<input type="number" id="q1" value="0.001" step="0.0005" min="0"></label>
+<label>Umbral fuga mediana / grande (mbar·L/s)<input type="number" id="q2" value="0.05" step="0.01" min="0"></label>
+</div></details>
+</div>
+
+<div class="card">
+<h2>Resultado de una prueba</h2>
+<div class="kpis" id="kpis"></div>
+<div style="margin-top:12px"><button id="rep">Repetir (nuevo ruido)</button></div>
+</div>
+
+<div class="card"><h2>Ciclo completo: presión vs. tiempo</h2><div id="c1"></div></div>
+<div class="card"><h2>Zoom: equilibrio y prueba (recta de regresión punteada)</h2><div id="c2"></div></div>
+
+<div class="card">
+<h2>Lote de muestras simuladas</h2>
+<div class="grid" style="align-items:end">
+<label>Réplicas por tamaño de orificio<input type="number" id="nrep" value="20" min="3" max="200"></label>
+<div><button id="bt">Generar lote (0, 5, 10, 25 y 50 µm)</button></div>
+</div>
+<div class="wrap" style="margin-top:10px"><table id="tb"></table></div>
+<details style="margin-top:10px"><summary>CSV para copiar</summary><textarea id="csv" readonly></textarea></details>
+</div>
+</main>
+<script>
+var $=function(i){return document.getElementById(i)};
+var G={tarro:{d:62,h:50,f:1},larga:{d:23,h:136,f:1},corta:{d:18.6,h:115,f:1},tubo:{d:54,h:120,f:0.8}};
+function gauss(){var u=1-Math.random(),v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+function fmt(v){var a=Math.abs(v);var s=a>=100?v.toFixed(0):a>=1?v.toFixed(1):a>=0.01?v.toFixed(3):v.toExponential(1);return s.replace(".",",")}
+function params(){
+ var g=G[$("geo").value],r=g.d/2,c=3;
+ var pk=Math.PI*r*r*g.h*g.f,ch=Math.PI*Math.pow(r+c,2)*(g.h+2*c);
+ var n=function(i){return parseFloat($(i).value)||0};
+ return {v:(ch-pk)/1000+n("dead"),d:n("d"),ob:n("ob"),lim:n("lim"),s:n("s"),pu:n("pu"),lc:n("lc"),sg:n("sg"),rf0:n("rf"),rf:n("rf"),rv:n("rv"),tf:n("tf"),te:n("te"),tt:n("tt"),q1:n("q1"),q2:n("q2")};
+}
+function sim(p){
+ var V=p.v*1e-6,S=p.s*1e-3,dt=0.01,P1=101325,Pu=p.pu*100,d=p.d*1e-6;
+ var K=d>0?Math.PI*Math.pow(d,4)/(128*1.85e-5*p.lc*1e-3)*(1-p.ob/100):0;
+ var t1=p.tf+p.te,t2=t1+p.tt,P=P1,ts=[],ps=[];
+ for(var i=0,t=0;t<=t2+1e-9;i++,t=i*dt){
+  if(i%5===0){ts.push(t);ps.push(P/100+gauss()*p.sg)}
+  var q=K*(P1*P1-P*P)/2,dP=q/V*dt;
+  if(t<p.tf)dP-=S/V*(P-Pu)*dt;else dP+=p.rf*100*dt;
+  P+=dP;
+ }
+ return {ts:ts,ps:ps,t1:t1,t2:t2};
+}
+function analyze(r,p){
+ var n=0,sx=0,sy=0,sxx=0,sxy=0;
+ for(var i=0;i<r.ts.length;i++){var t=r.ts[i];if(t>=r.t1&&t<=r.t2){n++;sx+=t;sy+=r.ps[i];sxx+=t*t;sxy+=t*r.ps[i]}}
+ var m=(n*sxy-sx*sy)/(n*sxx-sx*sx),b=(sy-m*sx)/n;
+ var dP=(m-p.rf0)*p.tt,Q=Math.max(0,m-p.rf0)*p.v/1000;
+ return {m:m,b:b,dP:dP,Q:Q,fail:dP>p.lim,cls:Q<p.q1?"pequeña":Q<p.q2?"mediana":"grande"};
+}
+function plot(el,xs,ys,o){
+ var W=560,H=210,L=54,R=12,T=10,B=30,x0=xs[0],x1=xs[xs.length-1];
+ var y0=o.y0!==undefined?o.y0:Math.min.apply(null,ys),y1=o.y1!==undefined?o.y1:Math.max.apply(null,ys);
+ if(y1-y0<1e-9)y1=y0+1;
+ if(o.y0===undefined){var pd=(y1-y0)*0.08;y0-=pd;y1+=pd}
+ var X=function(t){return L+(t-x0)/(x1-x0)*(W-L-R)},Y=function(v){return H-B-(v-y0)/(y1-y0)*(H-T-B)};
+ var s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+o.label+'" style="width:100%;height:auto">';
+ for(var i=0;i<=3;i++){var v=y0+(y1-y0)*i/3;s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="var(--bd)"/><text x="'+(L-6)+'" y="'+(Y(v)+4)+'" text-anchor="end" font-size="11" fill="var(--mut)">'+fmt(v)+'</text>'}
+ for(i=0;i<=4;i++){var t=x0+(x1-x0)*i/4;s+='<text x="'+X(t)+'" y="'+(H-12)+'" text-anchor="middle" font-size="11" fill="var(--mut)">'+t.toFixed(0)+'</text>'}
+ s+='<text x="'+(W/2)+'" y="'+(H-1)+'" text-anchor="middle" font-size="11" fill="var(--mut)">tiempo (s)</text><text x="12" y="'+(H/2)+'" font-size="11" fill="var(--mut)" transform="rotate(-90 12 '+(H/2)+')" text-anchor="middle">presión (mbar)</text>';
+ if(o.shade)s+='<rect x="'+X(o.shade[0])+'" y="'+T+'" width="'+(X(o.shade[1])-X(o.shade[0]))+'" height="'+(H-T-B)+'" fill="var(--ac)" opacity="0.10"/>';
+ s+='<polyline fill="none" stroke="var(--ac)" stroke-width="1.8" points="'+xs.map(function(t,i){return X(t).toFixed(1)+","+Y(ys[i]).toFixed(1)}).join(" ")+'"/>';
+ if(o.line)s+='<line x1="'+X(o.line[0])+'" y1="'+Y(o.line[1])+'" x2="'+X(o.line[2])+'" y2="'+Y(o.line[3])+'" stroke="var(--bad)" stroke-width="2" stroke-dasharray="6,4"/>';
+ el.innerHTML=s+'</svg>';
+}
+function run(){
+ var p=params();$("dv").textContent=p.d+" µm";$("ov").textContent=p.ob+" %";
+ var r=sim(p),a=analyze(r,p),mn=p.d===0;
+ var k=[["Volumen libre",fmt(p.v)+" cm³"],["ΔP en prueba",fmt(a.dP)+" mbar"],["Pendiente",fmt(a.m)+" mbar/s"],["Caudal Q",fmt(a.Q)+" mbar·L/s"],["Caudal Q",fmt(a.Q*59.2)+" sccm"],["Clase de fuga",a.fail?a.cls:"—"],["Decisión",a.fail?'<span class="bad">NO PASA</span>':'<span class="ok">PASA</span>']];
+ $("kpis").innerHTML=k.map(function(x){return '<div class="kpi"><small>'+x[0]+'</small><strong>'+x[1]+'</strong></div>'}).join("");
+ plot($("c1"),r.ts,r.ps,{y0:0,y1:1050,label:"Presión contra tiempo, ciclo completo",shade:[r.t1,r.t2]});
+ var z=[],zp=[];r.ts.forEach(function(t,i){if(t>=p.tf){z.push(t);zp.push(r.ps[i])}});
+ plot($("c2"),z,zp,{label:"Presión contra tiempo, fase de equilibrio y prueba",shade:[r.t1,r.t2],line:[r.t1,a.m*r.t1+a.b,r.t2,a.m*r.t2+a.b]});
+}
+function batch(){
+ var p=params(),n=Math.max(3,parseInt($("nrep").value)||20),rows="",csv="d_um,rep,dP_mbar,Q_mbarLs,Q_sccm,resultado\n";
+ [0,5,10,25,50].forEach(function(sz){
+  var f=0,sq=0,sd=0;
+  for(var k=0;k<n;k++){
+   var q=Object.assign({},p,{d:sz>0?Math.max(0.1,sz*(1+0.1*gauss())):0,v:p.v*(1+0.03*gauss()),rf:p.rf0*(1+p.rv/100*gauss())});
+   var a=analyze(sim(q),p);if(a.fail)f++;sq+=a.Q;sd+=a.dP;
+   csv+=sz+","+(k+1)+","+a.dP.toFixed(5)+","+a.Q.toExponential(3)+","+(a.Q*59.2).toExponential(3)+","+(a.fail?"NO PASA":"PASA")+"\n";
+  }
+  rows+="<tr><td>"+(sz===0?"Sin defecto":sz+" µm")+"</td><td>"+n+"</td><td>"+(100*f/n).toFixed(0)+" %</td><td>"+fmt(sd/n)+"</td><td>"+fmt(sq/n)+"</td></tr>";
+ });
+ $("tb").innerHTML="<tr><th>Orificio</th><th>n</th><th>% rechazadas</th><th>ΔP medio (mbar)</th><th>Q medio (mbar·L/s)</th></tr>"+rows;
+ $("csv").value=csv;
+}
+document.querySelectorAll("input,select").forEach(function(e){e.addEventListener("input",run)});
+$("rep").addEventListener("click",run);$("bt").addEventListener("click",batch);
+run();batch();
+</script>
+</body>
+</html>
